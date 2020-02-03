@@ -248,11 +248,15 @@ class ParkingSolver:
             # Follows the Rhino api
             if intersect is not None:
                 param.append(intersect[0][5])
-        if param[0] <= param[1]:
-            rs.TrimCurve(newRow, [param[0], param[1]])
-        else:
-            rs.TrimCurve(newRow, [param[1], param[0]])
+        print("param", param)
 
+        if param[0] <= param[1]:
+            newRow = rs.TrimCurve(newRow, [param[0], param[1]])
+        else:
+            newRow = rs.TrimCurve(newRow, [param[1], param[0]])
+
+
+        # newRow = rs.TrimCurve(newRow, [param[0], param[1]])
         print("TrimNewRowCurve", rs.CurveLength(newRow))
         return newRow
 
