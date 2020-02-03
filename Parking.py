@@ -120,7 +120,7 @@ class ParkingSolver:
         Make the newNode grow on (old)node
         :rtype: newNode(the next node)
         """
-        print(node)
+        # print(node)
         if node is not None:
 
             # if isinstance(node, CarPark) and isinstance(newNode, Road):
@@ -152,9 +152,9 @@ class ParkingSolver:
         """
         # base case
         # stop when current composition have one more "C" or "R"
-        print("node",node)
-        print("branch", branch)
-        print("edgeID",edgeID)
+        # print("node",node)
+        # print("branch", branch)
+        # print("edgeID",edgeID)
         if branch[1] > self.maxOffsetLength[edgeID] - CarPark.width:
             if isinstance(node, CarPark) and isinstance(node.prev, CarPark):
                 return
@@ -162,12 +162,16 @@ class ParkingSolver:
             self.result.append(branch)
             return
 
+        if node.line is None:
+            self.result.append(branch)
+            return
+
         # if this node is a "C" car park
         if isinstance(node, CarPark):
             if not node.isConnected():
-                print("nodeline", rs.CurveLength(node.line))
+                # print("nodeline", rs.CurveLength(node.line))
                 r = Road(edgeID, self.offsetRow(node.line, self.offsetDirection[edgeID], Road.width))
-                print("r", r.line)
+                # print("r", r.line)
                 newBranch = copy.deepcopy(branch)
                 newNode = self.growNode(node, r, newBranch)
                 self.grow(newNode, newBranch, edgeID)
@@ -232,15 +236,15 @@ class ParkingSolver:
         need to use self.edges
         :return:
         """
-        print("edge", rs.CurveLength(edge))
-        print("vec", vec)
-        print("width", width)
+        # print("edge", rs.CurveLength(edge))
+        # print("vec", vec)
+        # print("width", width)
         newRow = rs.OffsetCurve(edge, vec, width)
         # Magic number
-        print("newRow", newRow)
-        print("newRowCurve", rs.CurveLength(newRow))
+        # print("newRow", newRow)
+        # print("newRowCurve", rs.CurveLength(newRow))
         rs.ScaleObject(newRow, rs.CurveMidPoint(newRow), [20,20,0])
-        print("ScaleNewRowCurve", rs.CurveLength(newRow))
+        # print("ScaleNewRowCurve", rs.CurveLength(newRow))
         # Problem Below!!
         param = []
         for e in self.edges:
@@ -248,16 +252,20 @@ class ParkingSolver:
             # Follows the Rhino api
             if intersect is not None:
                 param.append(intersect[0][5])
-        print("param", param)
+        # print("param", param)
 
-        if param[0] <= param[1]:
+        if param[0] < param[1]:
             newRow = rs.TrimCurve(newRow, [param[0], param[1]])
-        else:
+        elif param[0] > param[1]:
             newRow = rs.TrimCurve(newRow, [param[1], param[0]])
+
+        else:
+            # only one intersection, it's time to stop
+            newRow = None
 
 
         # newRow = rs.TrimCurve(newRow, [param[0], param[1]])
-        print("TrimNewRowCurve", rs.CurveLength(newRow))
+        # print("TrimNewRowCurve", rs.CurveLength(newRow))
         return newRow
 
 
@@ -293,7 +301,13 @@ solver = ParkingSolver(verticesOfSite, edgesOfSite, surfaceOfSite)
 
 
 result = solver.solve(0, solver.edges[0])
+#print(result)
 order = sorted(result, key=lambda s: s[0], reverse=True)
 a = getPattern(order[0])
+print(a)
 b = order
-print(order)
+print(b[0])
+c = []
+for i in range(2,len(b[0])):
+    c.append(b[0][i].line)
+
