@@ -5,7 +5,6 @@
         surfaceOfSite: The surface of the site
     Output:
         a: The a output variable"""
-from typing import List, Any
 
 __author__ = "j9366"
 __version__ = "2019.12.10"
@@ -60,6 +59,9 @@ class Road:
 
 # class for calculating the best layout
 class ParkingSolver:
+    """
+    Row arrangement solver
+    """
 
     def __init__(self, vertices, edges, surface):
 
@@ -87,7 +89,8 @@ class ParkingSolver:
         # List of max offset length as a bound
         self.maxOffsetLength = self.getMaxOffsetLength()
 
-        self.siteWidth = siteWidth
+        # self.siteWidth = siteWidth
+        self.edgeDirection()
 
 
     def solve(self, edgeID, edge):
@@ -117,6 +120,7 @@ class ParkingSolver:
         Make the newNode grow on (old)node
         :rtype: newNode(the next node)
         """
+        print(node)
         if node is not None:
 
             # if isinstance(node, CarPark) and isinstance(newNode, Road):
@@ -131,7 +135,8 @@ class ParkingSolver:
         if isinstance(newNode, CarPark):
             branch[1] += CarPark.width
             # Matric: the total row length of car parking
-            branch[0] += node.getLineLength()
+            if node is not None:
+                branch[0] += node.getLineLength()
             branch.append(newNode)
         elif isinstance(newNode, Road):
             branch[1] += Road.width
@@ -147,7 +152,10 @@ class ParkingSolver:
         """
         # base case
         # stop when current composition have one more "C" or "R"
-        if branch[1] > self.siteWidth - CarPark.width:
+        print("node",node)
+        print("branch", branch)
+        print("edgeID",edgeID)
+        if branch[1] > self.maxOffsetLength[edgeID] - CarPark.width:
             if isinstance(node, CarPark) and isinstance(node.prev, CarPark):
                 return
 
@@ -157,7 +165,9 @@ class ParkingSolver:
         # if this node is a "C" car park
         if isinstance(node, CarPark):
             if not node.isConnected():
+                print("nodeline", rs.CurveLength(node.line))
                 r = Road(edgeID, self.offsetRow(node.line, self.offsetDirection[edgeID], Road.width))
+                print("r", r.line)
                 newBranch = copy.deepcopy(branch)
                 newNode = self.growNode(node, r, newBranch)
                 self.grow(newNode, newBranch, edgeID)
@@ -222,9 +232,16 @@ class ParkingSolver:
         need to use self.edges
         :return:
         """
+        print("edge", rs.CurveLength(edge))
+        print("vec", vec)
+        print("width", width)
         newRow = rs.OffsetCurve(edge, vec, width)
         # Magic number
-        rs.ScaleObject(newRow, rs.CurveMidPoint(newRow), 20)
+        print("newRow", newRow)
+        print("newRowCurve", rs.CurveLength(newRow))
+        rs.ScaleObject(newRow, rs.CurveMidPoint(newRow), [20,20,0])
+        print("ScaleNewRowCurve", rs.CurveLength(newRow))
+        # Problem Below!!
         param = []
         for e in self.edges:
             intersect = rs.CurveCurveIntersection(newRow, e)
@@ -236,6 +253,7 @@ class ParkingSolver:
         else:
             rs.TrimCurve(newRow, [param[1], param[0]])
 
+        print("TrimNewRowCurve", rs.CurveLength(newRow))
         return newRow
 
 
@@ -260,17 +278,17 @@ def getPattern(lst):
 
 
 
-class
 
 
 
-CarPark().width = parkingLength
-Road().width = roadWidth
 
-solver = ParkingSolver(siteWidth)
+# CarPark().width = parkingLength
+# Road().width = roadWidth
+
+solver = ParkingSolver(verticesOfSite, edgesOfSite, surfaceOfSite)
 
 
-result = solver.solve()
+result = solver.solve(0, solver.edges[0])
 order = sorted(result, key=lambda s: s[0], reverse=True)
 a = getPattern(order[0])
 b = order
