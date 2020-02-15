@@ -1,72 +1,214 @@
-"""Provides a scripting component.
-    Inputs:
-        verticesOfSite: The list of endPoints of the surface
-        edgesOfSite: The boundary of the site surface (limit to 4 sides)
-        surfaceOfSite: The surface of the site
-    Output:
-        a: The a output variable"""
+"""
+All Code for Parking Platform
 
-__author__ = "j9366"
+### Table of Content
+# Solver
+# SolverResult
+
+"""
+
+__author__ = "ZhihengJiao"
 __version__ = "2019.12.10"
 
 import rhinoscriptsyntax as rs
 import copy
 from Rhino.Geometry import Point3d
-
-"""
-Class for Carpark
-"""
-
-class CarInterface():
+from abc import abstractmethod, ABCMeta, ABC
 
 
-class CarPark():
+def overrides(interface_class):
+    def overrider(method):
+        assert (method.__name__ in dir(interface_class))
+        return method
+
+    return overrider
+
+
+def interface(interface_class):
+    pass
+
+
+########################################################################################################################
+# CarStallMeta
+########################################################################################################################
+@interface
+class CarStallMeta:
+    pass
+
+
+class NinetyDegCarStall(CarStallMeta):
     width = 5.3
+    length = 2.7
+    geometry = None
 
-    def __init__(self, lineID=None, line=None):
-        self.connectedToRoad = False
+    def __init__(self, geometry=None):
+        self.geometry = geometry
+
+
+########################################################################################################################
+# RoadMeta
+########################################################################################################################
+@interface
+class RoadMeta:
+    pass
+
+
+class NormalRoad(RoadMeta):
+    width = 7
+    geometry = None
+
+    def __init__(self, geometry=None):
+        self.geometry = geometry
+
+
+########################################################################################################################
+# StallRow
+########################################################################################################################
+@interface
+class RowNode:
+
+    def __init__(self, baseLineID=None, referenceLine=None, metaItem=None):
         self.next = None
         self.prev = None
-        self.line = line
-        self.lineID = lineID
+        self.metaItem = metaItem
+        self.referenceLine = referenceLine
+        self.baseLineID = baseLineID
 
     def getWidth(self):
-        return self.width
+        return self.metaItem.width
+
+    def getBaseLineID(self):
+        return self.baseLineID
+
+    def getReferenceLine(self):
+        return self.referenceLine;
 
     def getLineLength(self):
-        return rs.CurveLength(self.line)
+        return rs.CurveLength(self.referenceLine)
+
+    @abstractmethod
+    def __repr__(self):
+        return "TBD"
+
+
+class StallRow(RowNode):
+    """
+    was "CarPark"
+    """
+
+    @overrides
+    def __init__(self, baseLineID=None, referenceLine=None, carStallMeta=NinetyDegCarStall):
+        super().__init__(baseLineID, referenceLine, carStallMeta)
+        self.connectedToRoad = False
+
+    @overrides
+    def __repr__(self):
+        return "CarStallRow"
 
     def setConnection(self, connected):
         self.connectedToRoad = connected
 
-    def isConnected(self):
+    def isConnectedToRoad(self):
         return self.connectedToRoad
 
+
+class RoadRow(RowNode):
+
+    @overrides
+    def __init__(self, baseLineID=None, referenceLine=None, RoadMeta=NinetyDegCarStall):
+        super().__init__(baseLineID, referenceLine, RoadMeta)
+
+    @overrides
     def __repr__(self):
-        return "CarPark"
+        return "RoadRow"
 
 
-"""
-Class for Road
-"""
+########################################################################################################################
+# Metric
+########################################################################################################################
+@interface
+class Metric:
+    def __init__(self):
+        
 
 
-class Road:
-    width = 7
 
-    def __init__(self, lineID=None, line=None):
-        self.next = None
-        self.prev = None
-        self.line = line
+########################################################################################################################
+# SolverResult
+########################################################################################################################
+class SolverResult:
+    """
 
-    def getLineLength(self):
-        return rs.CurveLength(self.line)
+    """
 
-    def getWidth(self):
-        return self.width
+    def __init__(self, result, metric, metricClass=None):
+        """
+        :param result: The representation of a result, vary by Solvers
+        :param metric: The Number for sorting results. E.g. nums of parking stall
+        """
+        # some metrics and some format of result
+        self.result = result
+        self.metric = metric
+        # String representation of metric class it use.(Name of the metric)
+        self.metricClass = metricClass
+
+    def getMetric(self):
+        return self.metric
+
+    def getResult(self):
+        return self.result
 
     def __repr__(self):
-        return "Road"
+        return str(self.metricClass) + str(" : ") + str(self.metric) + str(self.result)
+
+
+
+
+########################################################################################################################
+# Solver
+########################################################################################################################
+@interface
+class Solver:
+    """
+    Interface of Solver
+    """
+
+    def __init__(self, metric):
+        self.resultRepository = []  # some metrics and some format of result
+        self.metric = metric
+
+    def solve(self, solvers=None):
+        """
+        Input a list of Solver, and get all possible result from those solvers, and get
+        a result list.
+        :param solvers: Solver[]
+        """
+        for sol in solvers:
+            sol.solve()
+        return self.resultRepository
+
+    def sortResultByMetrics(self):
+        return "sorted resultRepository"
+
+    def setMetric(self, metric):
+        self.metric = metric
+
+
+class ParkingStallSolver(Solver):
+    """
+    Implementation of Solver
+    """
+
+    def __init__(self, metric):
+        super().__init__(metric)
+
+    @overrides(Solver.solve)
+    def solve(self, solvers=None):
+        pass
+
+    @overrides(Solver.sortResultByMetrics)
+    def sortResultByMetrics(self):
+        self.metric
 
 
 # class for calculating the best layout
@@ -110,9 +252,9 @@ class ParkingSolver:
         Call this function to get all possible result of Car and Road Row placement.
         :return: a List of result [number of park, sum of car park width, "C", "R", "C", ...]
         """
-        c = CarPark(edgeID, edge)
+        c = StallRow(edgeID, edge)
         r = Road(edgeID, edge)
-        cWidth = CarPark.width
+        cWidth = StallRow.width
         rWidth = Road.width
         branchC = [0, 0]
         branchR = [0, 0]
@@ -132,17 +274,17 @@ class ParkingSolver:
         # print(node)
         if node is not None:
 
-            # if isinstance(node, CarPark) and isinstance(newNode, Road):
+            # if isinstance(node, StallRow) and isinstance(newNode, Road):
             #     print(node)
             #     print(newNode)
             #     node.connectedToRoad = True
-            if isinstance(node, Road) and isinstance(newNode, CarPark):
+            if isinstance(node, Road) and isinstance(newNode, StallRow):
                 newNode.connectedToRoad = True
 
         newNode.prev = node
 
-        if isinstance(newNode, CarPark):
-            branch[1] += CarPark.width
+        if isinstance(newNode, StallRow):
+            branch[1] += StallRow.width
             # Matric: the total row length of car parking
             if node is not None:
                 branch[0] += node.getLineLength()
@@ -164,29 +306,29 @@ class ParkingSolver:
         # print("node",node)
         # print("branch", branch)
         # print("edgeID",edgeID)
-        if branch[1] > self.maxOffsetLength[edgeID] - CarPark.width:
-            if isinstance(node, CarPark) and isinstance(node.prev, CarPark):
+        if branch[1] > self.maxOffsetLength[edgeID] - StallRow.width:
+            if isinstance(node, StallRow) and isinstance(node.prev, StallRow):
                 return
 
             self.result.append(branch)
             return
 
-        if node.line is None:
+        if node.referenceLine is None:
             self.result.append(branch)
             return
 
         # if this node is a "C" car park
-        if isinstance(node, CarPark):
-            if not node.isConnected():
-                # print("nodeline", rs.CurveLength(node.line))
-                r = Road(edgeID, self.offsetRow(node.line, self.offsetDirection[edgeID], Road.width))
-                # print("r", r.line)
+        if isinstance(node, StallRow):
+            if not node.isConnectedToRoad():
+                # print("nodereferenceLine", rs.CurveLength(node.referenceLine))
+                r = Road(edgeID, self.offsetRow(node.referenceLine, self.offsetDirection[edgeID], Road.width))
+                # print("r", r.referenceLine)
                 newBranch = copy.deepcopy(branch)
                 newNode = self.growNode(node, r, newBranch)
                 self.grow(newNode, newBranch, edgeID)
             else:
-                c = CarPark(edgeID, self.offsetRow(node.line, self.offsetDirection[edgeID], CarPark.width))
-                r = Road(edgeID, self.offsetRow(node.line, self.offsetDirection[edgeID], Road.width))
+                c = StallRow(edgeID, self.offsetRow(node.referenceLine, self.offsetDirection[edgeID], StallRow.width))
+                r = Road(edgeID, self.offsetRow(node.referenceLine, self.offsetDirection[edgeID], Road.width))
                 newBranch = copy.deepcopy(branch)
                 newNode = self.growNode(node, c, newBranch)
                 self.grow(newNode, newBranch, edgeID)
@@ -197,7 +339,7 @@ class ParkingSolver:
 
         # if this node is a "R" road
         elif isinstance(node, Road):
-            c = CarPark(edgeID, self.offsetRow(node.line, self.offsetDirection[edgeID], CarPark.width))
+            c = StallRow(edgeID, self.offsetRow(node.referenceLine, self.offsetDirection[edgeID], StallRow.width))
             newBranch = copy.deepcopy(branch)
             newNode = self.growNode(node, c, newBranch)
             self.grow(newNode, newBranch, edgeID)
@@ -276,38 +418,20 @@ class ParkingSolver:
         return newRow
 
 
-class Node:
-
-    def __init__(self, data, nextNode):
-        self.data = data
-        self.next = nextNode
-
-
 def getPattern(lst):
     lst = lst[2:]
     res = []
     for i in lst:
         toAdd = None
         if i == 'C':
-            toAdd = CarPark.width
+            toAdd = StallRow.width
         else:
             toAdd = Road.width
         res.append(toAdd)
     return res
 
 
-# CarPark().width = parkingLength
-# Road().width = roadWidth
 
-solver = ParkingSolver(verticesOfSite, edgesOfSite, surfaceOfSite)
-
-result = solver.solve(0, solver.edges[0])
-# print(result)
-order = sorted(result, key=lambda s: s[0], reverse=True)
-a = getPattern(order[0])
-print(a)
-b = order
-print(b[0])
-c = []
-for i in range(2, len(b[0])):
-    c.append(b[0][i].line)
+########################################################################################################################
+# SolverResult
+########################################################################################################################

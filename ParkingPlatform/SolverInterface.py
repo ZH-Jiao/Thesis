@@ -1,72 +1,68 @@
-"""Provides a scripting component.
-    Inputs:
-        verticesOfSite: The list of endPoints of the surface
-        edgesOfSite: The boundary of the site surface (limit to 4 sides)
-        surfaceOfSite: The surface of the site
-    Output:
-        a: The a output variable"""
+"""
+Interface of Solver
+"""
 
-__author__ = "j9366"
+__author__ = "ZhihengJiao"
 __version__ = "2019.12.10"
 
 import rhinoscriptsyntax as rs
 import copy
 from Rhino.Geometry import Point3d
-
-"""
-Class for Carpark
-"""
-
-class CarInterface():
+from abc import abstractmethod, ABCMeta, ABC
 
 
-class CarPark():
-    width = 5.3
+def overrides(interface_class):
+    def overrider(method):
+        assert (method.__name__ in dir(interface_class))
+        return method
 
-    def __init__(self, lineID=None, line=None):
-        self.connectedToRoad = False
-        self.next = None
-        self.prev = None
-        self.line = line
-        self.lineID = lineID
-
-    def getWidth(self):
-        return self.width
-
-    def getLineLength(self):
-        return rs.CurveLength(self.line)
-
-    def setConnection(self, connected):
-        self.connectedToRoad = connected
-
-    def isConnected(self):
-        return self.connectedToRoad
-
-    def __repr__(self):
-        return "CarPark"
+    return overrider
 
 
-"""
-Class for Road
-"""
+########################################################################################################################
+# Solver
+########################################################################################################################
+class SolverInterface:
+    """
+    Interface of Solver
+    """
+
+    def __init__(self, metric):
+        self.resultRepository = []  # some metrics and some format of result
+        self.metric = metric
+
+    def solve(self, solvers=None):
+        """
+        Input a list of Solver, and get all possible result from those solvers, and get
+        a result list.
+        :param solvers: Solver[]
+        """
+        for sol in solvers:
+            sol.solve()
+        return self.resultRepository
+
+    def sortResultByMetrics(self):
+        return "sorted resultRepository"
+
+    def setMetric(self, matric):
+        self.metric = metric
 
 
-class Road:
-    width = 7
+class ParkingStallSolver(SolverInterface, ABC):
+    """
+    Implementation of SolverInterface
+    """
 
-    def __init__(self, lineID=None, line=None):
-        self.next = None
-        self.prev = None
-        self.line = line
+    def __init__(self, metric):
+        super().__init__(metric)
 
-    def getLineLength(self):
-        return rs.CurveLength(self.line)
+    @overrides(SolverInterface.solve)
+    def solve(self, solvers=None):
+        pass
 
-    def getWidth(self):
-        return self.width
-
-    def __repr__(self):
-        return "Road"
+    @overrides(SolverInterface.sortResultByMetrics)
+    def sortResultByMetrics(self):
+        self.metric
 
 
 # class for calculating the best layout
@@ -296,18 +292,30 @@ def getPattern(lst):
     return res
 
 
-# CarPark().width = parkingLength
-# Road().width = roadWidth
+########################################################################################################################
+# SolverResult
+########################################################################################################################
+class SolverResult:
+    """
 
-solver = ParkingSolver(verticesOfSite, edgesOfSite, surfaceOfSite)
+    """
 
-result = solver.solve(0, solver.edges[0])
-# print(result)
-order = sorted(result, key=lambda s: s[0], reverse=True)
-a = getPattern(order[0])
-print(a)
-b = order
-print(b[0])
-c = []
-for i in range(2, len(b[0])):
-    c.append(b[0][i].line)
+    def __init__(self, result, metric, metricClass=None):
+        """
+        :param result: The representation of a result, vary by Solvers
+        :param metric: The Number for sorting results. E.g. nums of parking stall
+        """
+        # some metrics and some format of result
+        self.result = result
+        self.metric = metric
+        # String representation of metric class it use.(Name of the metric)
+        self.metricClass = metricClass
+
+    def getMetric(self):
+        return self.metric
+
+    def getResult(self):
+        return self.result
+
+    def __repr__(self):
+        return str(self.metricClass) + str(" : ") + str(self.metric) + str(self.result)
