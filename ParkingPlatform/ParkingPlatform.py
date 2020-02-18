@@ -14,17 +14,16 @@ __version__ = "2019.12.10"
 import rhinoscriptsyntax as rs
 import copy
 from Rhino.Geometry import Point3d
-from abc import abstractmethod, ABCMeta, ABC
 import math
 
-
+"""
 def overrides(interface_class):
     def overrider(method):
         assert (method.__name__ in dir(interface_class))
         return method
 
     return overrider
-
+"""
 
 def interface(interface_class):
     pass
@@ -33,7 +32,7 @@ def interface(interface_class):
 ########################################################################################################################
 # CarStallMeta
 ########################################################################################################################
-@interface
+# @interface
 class CarStallMeta:
     """
     Road
@@ -46,15 +45,18 @@ class CarStallMeta:
     # Vertical direction is width in Row
     # Horizontal direction is length in Row
     """
+
     width = 2.7
+
     length = 5.3
     geometry = None
     # Number of RoadRow that required to connected to this stall type
     requiredConnection = 1
     stallCount = 1
+    def __init__(self):
+        pass
 
-    def __init__(self, geometry=None):
-        self.geometry = geometry
+
 
 
 class NinetyDegCarStall(CarStallMeta):
@@ -123,7 +125,7 @@ class CarStallTypes:
 ########################################################################################################################
 # RoadRowMeta
 ########################################################################################################################
-@interface
+# @interface
 class RoadRowMeta:
     pass
 
@@ -139,7 +141,7 @@ class NormalRoadRow(RoadRowMeta):
 ########################################################################################################################
 # RowNode
 ########################################################################################################################
-@interface
+# @interface
 class RowNode:
 
     def __init__(self, baseLineID=None, referenceLine=None, metaItem=None):
@@ -156,12 +158,12 @@ class RowNode:
         return self.baseLineID
 
     def getReferenceLine(self):
-        return self.referenceLine
+        return self.referenceLine;
 
     def getLineLength(self):
         return rs.CurveLength(self.referenceLine)
 
-    @staticmethod
+    # @staticmethod
     def offsetRow(zone, edge, vec, width):
         """
         Offset a row depending on the type of width and direction.
@@ -199,7 +201,7 @@ class RowNode:
         # print("TrimNewRowCurve", rs.CurveLength(newRow))
         return newRow
 
-    @abstractmethod
+
     def __repr__(self):
         return "TBD"
 
@@ -209,14 +211,14 @@ class CarStallRow(RowNode):
     "CarStallRow"
     """
 
-    @overrides
+    # @overrides
     def __init__(self, baseLineID = None, referenceLine = None,
                  carStallMeta = NinetyDegCarStall):
-        super().__init__(baseLineID, referenceLine, carStallMeta)
+        RowNode.__init__(self, baseLineID, referenceLine, carStallMeta)
         self.connectedToRoadRow = 0
         self.requiredConnection = carStallMeta.requiredConnection
 
-    @overrides
+    # @overrides
     def __repr__(self):
         return "CarCarStallRow"
 
@@ -229,11 +231,11 @@ class CarStallRow(RowNode):
 
 class RoadRow(RowNode):
 
-    @overrides
-    def __init__(self, baseLineID=None, referenceLine=None, RoadRowMeta=None):
-        super().__init__(baseLineID, referenceLine, RoadRowMeta)
+    # @overrides
+    def __init__(self, baseLineID=None, referenceLine=None, roadRowMeta=None):
+        RowNode.__init__(self, baseLineID, referenceLine, roadRowMeta)
 
-    @overrides
+    # @overrides
     def __repr__(self):
         return "RoadRowRow"
 
@@ -241,7 +243,7 @@ class RoadRow(RowNode):
 ########################################################################################################################
 # Zone
 ########################################################################################################################
-@interface
+# @interface
 class Zone:
     def __init__(self, vertices, edges, surface):
         # vertices
@@ -304,7 +306,7 @@ class Zone:
 ########################################################################################################################
 # Metric
 ########################################################################################################################
-@interface
+# @interface
 class Metric:
     def __init__(self, metricNumber):
         self.metricNumber = metricNumber
@@ -317,11 +319,11 @@ class Metric:
 
 
 class StallCountMetric(Metric):
-    @overrides
+    # @overrides
     def __init__(self, metricNumber):
-        super().__init__()
+        Metric.__init__(self, metricNumber)
 
-    @overrides
+    # @overrides
     def calculate(self):
         pass
 
@@ -355,7 +357,7 @@ class RowSolverResult:
     def getTotalWidth(self):
         return self.totalWidth
 
-    def addRow(self, rowNode: RowNode):
+    def addRow(self, rowNode):
         self.result.append(rowNode)
         self.totalWidth += rowNode.getWidth()
 
@@ -366,7 +368,7 @@ class RowSolverResult:
 ########################################################################################################################
 # Solver
 ########################################################################################################################
-@interface
+# @interface
 class Solver:
     """
     Interface of Solver
@@ -399,18 +401,19 @@ class ParkingStallSolver(Solver):
     """
 
     def __init__(self, metric, zone=None, childSolvers=None):
-        super().__init__(metric)
+        Solver.__init__(self, metric)
         # site is an instance of Zone class
         self.zone = zone
         self.childSolvers = childSolvers
 
-    @overrides(Solver.solve)
+    # @overrides(Solver.solve)
     def solve(self):
-        for sol in self.childSolvers:
-            sol.solve()
+        if not self.childSolvers == None:
+            for sol in self.childSolvers:
+                sol.solve()
         self.solveSelf()
 
-    @overrides(Solver.sortResultByMetrics)
+    # @overrides(Solver.sortResultByMetrics)
     def sortResultByMetrics(self):
         self.metric
 
@@ -421,12 +424,12 @@ class ParkingStallSolver(Solver):
         :return: a List of result [number of park, sum of car park width, "C", "R", "C", ...]
         """
         for baseLineID in range(len(self.zone.edges)):
-            self.dfs(self, self.zone.edges[baseLineID])
+            self.dfs(baseLineID)
 
     def dfs(self, baseLineID):
 
-        c = CarStallRow(baseLineID=baseLineID, referenceLine=self.zone.edges[baseLineID])
-        r = RoadRow(baseLineID=baseLineID, referenceLine=self.zone.edges[baseLineID])
+        c = CarStallRow(baseLineID=baseLineID, referenceLine=self.zone.edges[baseLineID], carStallMeta=NinetyDegCarStall)
+        r = RoadRow(baseLineID=baseLineID, referenceLine=self.zone.edges[baseLineID], roadRowMeta=NormalRoadRow)
 
         branchC = RowSolverResult([], metricClassInstance=StallCountMetric(0))
         branchR = RowSolverResult([], metricClassInstance=StallCountMetric(0))
@@ -478,7 +481,7 @@ class ParkingStallSolver(Solver):
 
             # base case
             # stop when current composition have one more "C" or "R"
-            # print("node",node)
+            print("node",node)
             # print("branch", branch)
             # print("baseLineID",baseLineID)
             if branch.getTotalWidth() >= self.zone.maxOffsetLength[baseLineID]:
@@ -490,17 +493,17 @@ class ParkingStallSolver(Solver):
                 self.resultRepository.append(branch)
                 return
 
-            if node.line is None:
+            if node.referenceLine is None:
                 self.resultRepository.append(branch)
                 return
 
             # if this node is a "C" car park
             if isinstance(node, CarStallRow):
-                if not node.isConnected():
+                if not node.isConnectedToRoadRow():
                     # print("nodeline", rs.CurveLength(node.line))
                     r = RoadRow(baseLineID=baseLineID,
-                                referenceLine=RowNode.offsetRow(self.zone, node.line,
-                                                                self.offsetDirection[baseLineID], NormalRoadRow.width),
+                                referenceLine=RowNode.offsetRow(self.zone, node.referenceLine,
+                                                                self.zone.offsetDirection[baseLineID], NormalRoadRow.width),
                                 RoadRowMeta=NormalRoadRow)
 
                     # print("r", r.line)
@@ -509,12 +512,12 @@ class ParkingStallSolver(Solver):
                     self.grow(newNode, newBranch, baseLineID)
                 else:
                     c = CarStallRow(baseLineID=baseLineID,
-                                    referenceLine=self.offsetRow(self.zone, node.line,
-                                                                 self.offsetDirection[baseLineID], carStallType.width),
+                                    referenceLine=self.offsetRow(self.zone, node.referenceLine,
+                                                                 self.zone.offsetDirection[baseLineID], carStallType.width),
                                     carStallMeta=carStallType)
                     r = RoadRow(baseLineID=baseLineID,
-                                referenceLine=RowNode.offsetRow(self.zone, node.line,
-                                                                self.offsetDirection[baseLineID], NormalRoadRow.width),
+                                referenceLine=RowNode.offsetRow(self.zone, node.referenceLine,
+                                                                self.zone.offsetDirection[baseLineID], NormalRoadRow.width),
                                 RoadRowMeta=NormalRoadRow)
                     newBranch = copy.deepcopy(branch)
                     newNode = self.growNode(node, c, newBranch)
@@ -527,8 +530,8 @@ class ParkingStallSolver(Solver):
             # if this node is a "R" road
             elif isinstance(node, RoadRow):
                 c = CarStallRow(baseLineID=baseLineID,
-                                referenceLine=self.offsetRow(self.zone, node.line,
-                                                             self.offsetDirection[baseLineID], carStallType.width),
+                                referenceLine=self.offsetRow(self.zone, node.referenceLine,
+                                                             self.zone.offsetDirection[baseLineID], carStallType.width),
                                 carStallMeta=carStallType)
                 newBranch = copy.deepcopy(branch)
                 newNode = self.growNode(node, c, newBranch)
@@ -564,8 +567,11 @@ def getPattern(lst):
     Output:
         a: The a output variable"""
 
-if __name__ == "__main__":
-    # execute only if run as a script
-    thisZone = Zone(vertices=verticesOfSite, edges=edgesOfSite, surface=surfaceOfSite)
-    ps = ParkingStallSolver(metric=StallCountMetric, zone=thisZone)
-    a = ps.resultRepository
+
+# execute only if run as a script
+thisZone = Zone(vertices=verticesOfSite, edges=edgesOfSite, surface=surfaceOfSite)
+print("come on")
+print(thisZone)
+ps = ParkingStallSolver(metric=StallCountMetric, zone=thisZone)
+ps.solve()
+a = ps.resultRepository
