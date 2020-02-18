@@ -143,8 +143,8 @@ class NormalRoadRow(RoadRowMeta):
 class RowNode:
 
     def __init__(self, baseLineID=None, referenceLine=None, metaItem=None):
-        self.next: RowNode = None
-        self.prev: RowNode = None
+        self.next = None
+        self.prev = None
         self.metaItem = metaItem
         self.referenceLine = referenceLine
         self.baseLineID = baseLineID
@@ -156,7 +156,7 @@ class RowNode:
         return self.baseLineID
 
     def getReferenceLine(self):
-        return self.referenceLine;
+        return self.referenceLine
 
     def getLineLength(self):
         return rs.CurveLength(self.referenceLine)
