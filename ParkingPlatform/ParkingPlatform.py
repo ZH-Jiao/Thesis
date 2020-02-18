@@ -162,7 +162,7 @@ class RowNode:
         return rs.CurveLength(self.referenceLine)
 
     @staticmethod
-    def offsetRow(zone: Zone, edge, vec, width):
+    def offsetRow(zone, edge, vec, width):
         """
         Offset a row depending on the type of width and direction.
         need to use self.edges
@@ -210,8 +210,8 @@ class CarStallRow(RowNode):
     """
 
     @overrides
-    def __init__(self, baseLineID: int = None, referenceLine: object = None,
-                 carStallMeta: CarStallMeta = NinetyDegCarStall):
+    def __init__(self, baseLineID = None, referenceLine = None,
+                 carStallMeta = NinetyDegCarStall):
         super().__init__(baseLineID, referenceLine, carStallMeta)
         self.connectedToRoadRow = 0
         self.requiredConnection = carStallMeta.requiredConnection
@@ -334,7 +334,7 @@ class RowSolverResult:
 
     """
 
-    def __init__(self, result=[], metricClassInstance: Metric = None):
+    def __init__(self, result=[], metricClassInstance = None):
         """
         :param result: The representation of a result, vary by Solvers
         :param metric: The Number for sorting results. E.g. nums of parking stall
@@ -438,7 +438,7 @@ class ParkingStallSolver(Solver):
         self.grow(startR, branchR, baseLineID)
         return self.resultRepository
 
-    def growNode(self, node, newNode, branch: RowSolverResult):
+    def growNode(self, node, newNode, branch):
         """
         Make the newNode grow on (old)node
         :rtype: newNode(the next node)
@@ -465,7 +465,7 @@ class ParkingStallSolver(Solver):
 
         return newNode
 
-    def grow(self, node: RowNode, branch: RowSolverResult, baseLineID: int):
+    def grow(self, node, branch, baseLineID):
         """
         DFS for the parking algorithm. Each node represent a row of "C"carparking of "R"road.
         branch is a list of lists of "C" and "R" composition. Such as [number of park, sum of car and road width, "C", "R", "C", ...]
