@@ -116,8 +116,8 @@ class CarStallTypes:
     """
     The wrapper class of all carStallTypes
     """
-    carStallTypeList = [NinetyDegCarStall, SixtyDegCarStall, SixtyDegCarStallDouble, FortyFiveDegCarStall,
-                        FortyFiveDegCarStall, ThirtyDegCarStall, ThirtyDegCarStall, ZeroDegCarStall]
+    carStallTypeList = [NinetyDegCarStall(), SixtyDegCarStall(), SixtyDegCarStallDouble(), FortyFiveDegCarStall(),
+                        FortyFiveDegCarStall(), ThirtyDegCarStall(), ThirtyDegCarStall(), ZeroDegCarStall()]
 
 
 ########################################################################################################################
@@ -161,6 +161,44 @@ class RowNode:
     def getLineLength(self):
         return rs.CurveLength(self.referenceLine)
 
+    @staticmethod
+    def offsetRow(zone: Zone, edge, vec, width):
+        """
+        Offset a row depending on the type of width and direction.
+        need to use self.edges
+        :return:
+        """
+        # print("edge", rs.CurveLength(edge))
+        # print("vec", vec)
+        # print("width", width)
+        newRow = rs.OffsetCurve(edge, vec, width)
+        # Magic number
+        # print("newRow", newRow)
+        # print("newRowCurve", rs.CurveLength(newRow))
+        rs.ScaleObject(newRow, rs.CurveMidPoint(newRow), [20, 20, 0])
+        # print("ScaleNewRowCurve", rs.CurveLength(newRow))
+        # Problem Below!!
+        param = []
+        for e in zone.edges:
+            intersect = rs.CurveCurveIntersection(newRow, e)
+            # Follows the Rhino api
+            if intersect is not None:
+                param.append(intersect[0][5])
+        # print("param", param)
+
+        if param[0] < param[1]:
+            newRow = rs.TrimCurve(newRow, [param[0], param[1]])
+        elif param[0] > param[1]:
+            newRow = rs.TrimCurve(newRow, [param[1], param[0]])
+
+        else:
+            # only one intersection, it's time to stop
+            newRow = None
+
+        # newRow = rs.TrimCurve(newRow, [param[0], param[1]])
+        # print("TrimNewRowCurve", rs.CurveLength(newRow))
+        return newRow
+
     @abstractmethod
     def __repr__(self):
         return "TBD"
@@ -172,7 +210,8 @@ class CarStallRow(RowNode):
     """
 
     @overrides
-    def __init__(self, baseLineID: int = None, referenceLine: object = None, carStallMeta: CarStallMeta = NinetyDegCarStall):
+    def __init__(self, baseLineID: int = None, referenceLine: object = None,
+                 carStallMeta: CarStallMeta = NinetyDegCarStall):
         super().__init__(baseLineID, referenceLine, carStallMeta)
         self.connectedToRoadRow = 0
         self.requiredConnection = carStallMeta.requiredConnection
@@ -188,10 +227,10 @@ class CarStallRow(RowNode):
         return self.requiredConnection <= 0
 
 
-class RoadRowRow(RowNode):
+class RoadRow(RowNode):
 
     @overrides
-    def __init__(self, baseLineID=None, referenceLine=None, RoadRowMeta=NinetyDegCarStall):
+    def __init__(self, baseLineID=None, referenceLine=None, RoadRowMeta=None):
         super().__init__(baseLineID, referenceLine, RoadRowMeta)
 
     @overrides
@@ -369,12 +408,11 @@ class ParkingStallSolver(Solver):
     def solve(self):
         for sol in self.childSolvers:
             sol.solve()
-        solveSelf()
+        self.solveSelf()
 
     @overrides(Solver.sortResultByMetrics)
     def sortResultByMetrics(self):
         self.metric
-
 
     def solveSelf(self):
         """
@@ -383,12 +421,12 @@ class ParkingStallSolver(Solver):
         :return: a List of result [number of park, sum of car park width, "C", "R", "C", ...]
         """
         for baseLineID in range(len(self.zone.edges)):
-            dfs(self, self.zone.edges[baseLineID])
+            self.dfs(self, self.zone.edges[baseLineID])
 
     def dfs(self, baseLineID):
 
         c = CarStallRow(baseLineID=baseLineID, referenceLine=self.zone.edges[baseLineID])
-        r = RoadRowRow(baseLineID=baseLineID, referenceLine=self.zone.edges[baseLineID])
+        r = RoadRow(baseLineID=baseLineID, referenceLine=self.zone.edges[baseLineID])
 
         branchC = RowSolverResult([], metricClassInstance=StallCountMetric(0))
         branchR = RowSolverResult([], metricClassInstance=StallCountMetric(0))
@@ -400,7 +438,7 @@ class ParkingStallSolver(Solver):
         self.grow(startR, branchR, baseLineID)
         return self.resultRepository
 
-    def growNode(self, node, newNode, branch):
+    def growNode(self, node, newNode, branch: RowSolverResult):
         """
         Make the newNode grow on (old)node
         :rtype: newNode(the next node)
@@ -418,14 +456,12 @@ class ParkingStallSolver(Solver):
         newNode.prev = node
 
         if isinstance(newNode, CarStallRow):
-            branch[1] += CarStallRow.width
+            branch.addRow(newNode)
             # Matric: the total row length of car parking
             if node is not None:
-                branch[0] += node.getLineLength()
-            branch.append(newNode)
+                branch.metricClassInstance.metricNumber += 1
         elif isinstance(newNode, RoadRow):
-            branch[1] += RoadRow.width
-            branch.append(newNode)
+            branch.addRow(newNode)
 
         return newNode
 
@@ -462,14 +498,24 @@ class ParkingStallSolver(Solver):
             if isinstance(node, CarStallRow):
                 if not node.isConnected():
                     # print("nodeline", rs.CurveLength(node.line))
-                    r = RoadRow(baseLineID=baseLineID, self.offsetRow(node.line, self.offsetDirection[baseLineID], RoadRow.width))
+                    r = RoadRow(baseLineID=baseLineID,
+                                referenceLine=RowNode.offsetRow(self.zone, node.line,
+                                                                self.offsetDirection[baseLineID], NormalRoadRow.width),
+                                RoadRowMeta=NormalRoadRow)
+
                     # print("r", r.line)
                     newBranch = copy.deepcopy(branch)
                     newNode = self.growNode(node, r, newBranch)
                     self.grow(newNode, newBranch, baseLineID)
                 else:
-                    c = CarStallRow(baseLineID, self.offsetRow(node.line, self.offsetDirection[baseLineID], CarStallRow.width))
-                    r = RoadRow(baseLineID, self.offsetRow(node.line, self.offsetDirection[baseLineID], RoadRow.width))
+                    c = CarStallRow(baseLineID=baseLineID,
+                                    referenceLine=self.offsetRow(self.zone, node.line,
+                                                                 self.offsetDirection[baseLineID], carStallType.width),
+                                    carStallMeta=carStallType)
+                    r = RoadRow(baseLineID=baseLineID,
+                                referenceLine=RowNode.offsetRow(self.zone, node.line,
+                                                                self.offsetDirection[baseLineID], NormalRoadRow.width),
+                                RoadRowMeta=NormalRoadRow)
                     newBranch = copy.deepcopy(branch)
                     newNode = self.growNode(node, c, newBranch)
                     self.grow(newNode, newBranch, baseLineID)
@@ -480,7 +526,10 @@ class ParkingStallSolver(Solver):
 
             # if this node is a "R" road
             elif isinstance(node, RoadRow):
-                c = CarStallRow(baseLineID, self.offsetRow(node.line, self.offsetDirection[baseLineID], CarStallRow.width))
+                c = CarStallRow(baseLineID=baseLineID,
+                                referenceLine=self.offsetRow(self.zone, node.line,
+                                                             self.offsetDirection[baseLineID], carStallType.width),
+                                carStallMeta=carStallType)
                 newBranch = copy.deepcopy(branch)
                 newNode = self.growNode(node, c, newBranch)
                 self.grow(newNode, newBranch, baseLineID)
@@ -489,213 +538,6 @@ class ParkingStallSolver(Solver):
         # vertices
         # Boundary of the site (4 edges in this version)
         pass
-
-
-# class for calculating the best layout
-class ParkingSolver:
-    """
-    Row arrangement solver
-    """
-
-    def __init__(self, vertices, edges, surface):
-
-        self.size = 0
-        self.carParkNum = 0
-
-        # vertices
-        self.vertices = vertices
-
-        # Result from solve()
-        self.result = []
-
-        # Boundary of the site (4 edges in this version)
-        self.edges = edges
-
-        # Surface of the site
-        self.surface = surface
-
-        # Center point of the site surface
-        self.center = rs.SurfaceAreaCentroid(surface)[0]
-
-        # List of unit vectors that pointing from self.edges for offset
-        self.offsetDirection = []
-
-        # List of max offset length as a bound
-        self.maxOffsetLength = self.getMaxOffsetLength()
-
-        # self.siteWidth = siteWidth
-        self.edgeDirection()
-
-    def solve(self, baseLineID, edge):
-        """
-        DFS
-        Call this function to get all possible result of Car and RoadRow Row placement.
-        :return: a List of result [number of park, sum of car park width, "C", "R", "C", ...]
-        """
-        c = CarStallRow(baseLineID, edge)
-        r = RoadRow(baseLineID, edge)
-        cWidth = CarStallRow.width
-        rWidth = RoadRow.width
-        branchC = [0, 0]
-        branchR = [0, 0]
-
-        startC = self.growNode(None, c, branchC)
-        startR = self.growNode(None, r, branchR)
-
-        self.grow(startC, branchC, baseLineID)
-        self.grow(startR, branchR, baseLineID)
-        return self.result
-
-    def growNode(self, node, newNode, branch):
-        """
-        Make the newNode grow on (old)node
-        :rtype: newNode(the next node)
-        """
-        # print(node)
-        if node is not None:
-
-            # if isinstance(node, CarStallRow) and isinstance(newNode, RoadRow):
-            #     print(node)
-            #     print(newNode)
-            #     node.connectedToRoadRow = True
-            if isinstance(node, RoadRow) and isinstance(newNode, CarStallRow):
-                newNode.connectedToRoadRow = True
-
-        newNode.prev = node
-
-        if isinstance(newNode, CarStallRow):
-            branch[1] += CarStallRow.width
-            # Matric: the total row length of car parking
-            if node is not None:
-                branch[0] += node.getLineLength()
-            branch.append(newNode)
-        elif isinstance(newNode, RoadRow):
-            branch[1] += RoadRow.width
-            branch.append(newNode)
-
-        return newNode
-
-    def grow(self, node, branch: , baseLineID):
-        """
-        DFS for the parking algorithm. Each node represent a row of "C"carparking of "R"road.
-        branch is a list of lists of "C" and "R" composition. Such as [number of park, sum of car and road width, "C", "R", "C", ...]
-        :rtype: object
-        """
-        # base case
-        # stop when current composition have one more "C" or "R"
-        # print("node",node)
-        # print("branch", branch)
-        # print("baseLineID",baseLineID)
-        if branch > self.maxOffsetLength[baseLineID] - CarStallRow.width:
-            if isinstance(node, CarStallRow) and isinstance(node.prev, CarStallRow):
-                return
-
-            self.result.append(branch)
-            return
-
-        if node.referenceLine is None:
-            self.result.append(branch)
-            return
-
-        # if this node is a "C" car park
-        if isinstance(node, CarStallRow):
-            if not node.isConnectedToRoadRow():
-                # print("nodereferenceLine", rs.CurveLength(node.referenceLine))
-                r = RoadRow(baseLineID, self.offsetRow(node.referenceLine, self.offsetDirection[baseLineID], RoadRow.width))
-                # print("r", r.referenceLine)
-                newBranch = copy.deepcopy(branch)
-                newNode = self.growNode(node, r, newBranch)
-                self.grow(newNode, newBranch, baseLineID)
-            else:
-                c = CarStallRow(baseLineID, self.offsetRow(node.referenceLine, self.offsetDirection[baseLineID], CarStallRow.width))
-                r = RoadRow(baseLineID, self.offsetRow(node.referenceLine, self.offsetDirection[baseLineID], RoadRow.width))
-                newBranch = copy.deepcopy(branch)
-                newNode = self.growNode(node, c, newBranch)
-                self.grow(newNode, newBranch, baseLineID)
-
-                newBranch = copy.deepcopy(branch)
-                newNode = self.growNode(node, r, newBranch)
-                self.grow(newNode, newBranch, baseLineID)
-
-        # if this node is a "R" road
-        elif isinstance(node, RoadRow):
-            c = CarStallRow(baseLineID, self.offsetRow(node.referenceLine, self.offsetDirection[baseLineID], CarStallRow.width))
-            newBranch = copy.deepcopy(branch)
-            newNode = self.growNode(node, c, newBranch)
-            self.grow(newNode, newBranch, baseLineID)
-
-    def getMaxOffsetLength(self):
-        """
-        Given the boundaries: self.edges, vertices: self.vertices
-        get a corresponding list of maximum offset distance(like the width for the site)
-        :rtype: List of max offset lengths
-        """
-        resList = []
-        for edge in self.edges:
-            maxLength = 0
-            for vertex in self.vertices:
-                currLength = rs.LineMinDistanceTo(edge, vertex)
-                maxLength = max(maxLength, currLength)
-            resList.append(maxLength)
-        return resList
-
-    def edgeDirection(self):
-        """
-        Calculate the unit vector of offset directions for self.edges and append in list: self.offsetDirection.
-        :rtype: None (result in self.offsetDirection)
-        """
-        for edge in self.edges:
-            # make vertical vector
-            curveVector = rs.VectorCreate(rs.CurveStartPoint(edge), rs.CurveEndPoint(edge))
-            midPoint = rs.CurveMidPoint(edge)
-            vec1 = rs.VectorRotate(curveVector, 90.0, [0, 0, 1])
-            vec2 = rs.VectorRotate(curveVector, -90.0, [0, 0, 1])
-            midToCenterVec = rs.VectorCreate(midPoint, self.center)
-            offsetVec = ""
-            if (rs.VectorDotProduct(vec1, midToCenterVec) > 0):
-                offsetVec = vec1
-            else:
-                offsetVec = vec2
-            offsetVec = rs.VectorUnitize(offsetVec)
-            # result
-            self.offsetDirection.append(offsetVec)
-
-    def offsetRow(self, edge, vec, width):
-        """
-        Offset a row depending on the type of width and direction.
-        need to use self.edges
-        :return:
-        """
-        # print("edge", rs.CurveLength(edge))
-        # print("vec", vec)
-        # print("width", width)
-        newRow = rs.OffsetCurve(edge, vec, width)
-        # Magic number
-        # print("newRow", newRow)
-        # print("newRowCurve", rs.CurveLength(newRow))
-        rs.ScaleObject(newRow, rs.CurveMidPoint(newRow), [20, 20, 0])
-        # print("ScaleNewRowCurve", rs.CurveLength(newRow))
-        # Problem Below!!
-        param = []
-        for e in self.edges:
-            intersect = rs.CurveCurveIntersection(newRow, e)
-            # Follows the Rhino api
-            if intersect is not None:
-                param.append(intersect[0][5])
-        # print("param", param)
-
-        if param[0] < param[1]:
-            newRow = rs.TrimCurve(newRow, [param[0], param[1]])
-        elif param[0] > param[1]:
-            newRow = rs.TrimCurve(newRow, [param[1], param[0]])
-
-        else:
-            # only one intersection, it's time to stop
-            newRow = None
-
-        # newRow = rs.TrimCurve(newRow, [param[0], param[1]])
-        # print("TrimNewRowCurve", rs.CurveLength(newRow))
-        return newRow
 
 
 def getPattern(lst):
@@ -710,6 +552,20 @@ def getPattern(lst):
         res.append(toAdd)
     return res
 
+
 ########################################################################################################################
-# RowSolverResult
+# Main for ParkingStallSolver
 ########################################################################################################################
+"""Provides a scripting component.
+    Inputs:
+        verticesOfSite: The list of endPoints of the surface
+        edgesOfSite: The boundary of the site surface (limit to 4 sides)
+        surfaceOfSite: The surface of the site
+    Output:
+        a: The a output variable"""
+
+if __name__ == "__main__":
+    # execute only if run as a script
+    thisZone = Zone(vertices=verticesOfSite, edges=edgesOfSite, surface=surfaceOfSite)
+    ps = ParkingStallSolver(metric=StallCountMetric, zone=thisZone)
+    a = ps.resultRepository
