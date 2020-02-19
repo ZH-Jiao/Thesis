@@ -25,8 +25,52 @@ def overrides(interface_class):
     return overrider
 """
 
+
+
 def interface(interface_class):
     pass
+
+
+########################################################################################################################
+# Global Method
+########################################################################################################################
+# @staticmethod
+def offsetRow(zone, edge, vec, width):
+    """
+    Offset a row depending on the type of width and direction.
+    need to use self.edges
+    :return:
+    """
+    # print("edge", rs.CurveLength(edge))
+    # print("vec", vec)
+    # print("width", width)
+    newRow = rs.OffsetCurve(edge, vec, width)
+    # Magic number
+    # print("newRow", newRow)
+    # print("newRowCurve", rs.CurveLength(newRow))
+    rs.ScaleObject(newRow, rs.CurveMidPoint(newRow), [20, 20, 0])
+    # print("ScaleNewRowCurve", rs.CurveLength(newRow))
+    # Problem Below!!
+    param = []
+    for e in zone.edges:
+        intersect = rs.CurveCurveIntersection(newRow, e)
+        # Follows the Rhino api
+        if intersect is not None:
+            param.append(intersect[0][5])
+    # print("param", param)
+
+    if param[0] < param[1]:
+        newRow = rs.TrimCurve(newRow, [param[0], param[1]])
+    elif param[0] > param[1]:
+        newRow = rs.TrimCurve(newRow, [param[1], param[0]])
+
+    else:
+        # only one intersection, it's time to stop
+        newRow = None
+
+    # newRow = rs.TrimCurve(newRow, [param[0], param[1]])
+    # print("TrimNewRowCurve", rs.CurveLength(newRow))
+    return newRow
 
 
 ########################################################################################################################
@@ -163,43 +207,7 @@ class RowNode:
     def getLineLength(self):
         return rs.CurveLength(self.referenceLine)
 
-    # @staticmethod
-    def offsetRow(zone, edge, vec, width):
-        """
-        Offset a row depending on the type of width and direction.
-        need to use self.edges
-        :return:
-        """
-        # print("edge", rs.CurveLength(edge))
-        # print("vec", vec)
-        # print("width", width)
-        newRow = rs.OffsetCurve(edge, vec, width)
-        # Magic number
-        # print("newRow", newRow)
-        # print("newRowCurve", rs.CurveLength(newRow))
-        rs.ScaleObject(newRow, rs.CurveMidPoint(newRow), [20, 20, 0])
-        # print("ScaleNewRowCurve", rs.CurveLength(newRow))
-        # Problem Below!!
-        param = []
-        for e in zone.edges:
-            intersect = rs.CurveCurveIntersection(newRow, e)
-            # Follows the Rhino api
-            if intersect is not None:
-                param.append(intersect[0][5])
-        # print("param", param)
 
-        if param[0] < param[1]:
-            newRow = rs.TrimCurve(newRow, [param[0], param[1]])
-        elif param[0] > param[1]:
-            newRow = rs.TrimCurve(newRow, [param[1], param[0]])
-
-        else:
-            # only one intersection, it's time to stop
-            newRow = None
-
-        # newRow = rs.TrimCurve(newRow, [param[0], param[1]])
-        # print("TrimNewRowCurve", rs.CurveLength(newRow))
-        return newRow
 
 
     def __repr__(self):
@@ -408,7 +416,7 @@ class ParkingStallSolver(Solver):
 
     # @overrides(Solver.solve)
     def solve(self):
-        if not self.childSolvers == None:
+        if self.childSolvers is not None:
             for sol in self.childSolvers:
                 sol.solve()
         self.solveSelf()
@@ -500,11 +508,11 @@ class ParkingStallSolver(Solver):
             # if this node is a "C" car park
             if isinstance(node, CarStallRow):
                 if not node.isConnectedToRoadRow():
-                    # print("nodeline", rs.CurveLength(node.line))
+                    # print("nodeline", rs.CurveLength(node.referenceLine))
                     r = RoadRow(baseLineID=baseLineID,
-                                referenceLine=RowNode.offsetRow(self.zone, node.referenceLine,
+                                referenceLine=offsetRow(self.zone, node.referenceLine,
                                                                 self.zone.offsetDirection[baseLineID], NormalRoadRow.width),
-                                RoadRowMeta=NormalRoadRow)
+                                roadRowMeta=NormalRoadRow)
 
                     # print("r", r.line)
                     newBranch = copy.deepcopy(branch)
@@ -512,13 +520,13 @@ class ParkingStallSolver(Solver):
                     self.grow(newNode, newBranch, baseLineID)
                 else:
                     c = CarStallRow(baseLineID=baseLineID,
-                                    referenceLine=self.offsetRow(self.zone, node.referenceLine,
+                                    referenceLine=offsetRow(self.zone, node.referenceLine,
                                                                  self.zone.offsetDirection[baseLineID], carStallType.width),
                                     carStallMeta=carStallType)
                     r = RoadRow(baseLineID=baseLineID,
-                                referenceLine=RowNode.offsetRow(self.zone, node.referenceLine,
+                                referenceLine=offsetRow(self.zone, node.referenceLine,
                                                                 self.zone.offsetDirection[baseLineID], NormalRoadRow.width),
-                                RoadRowMeta=NormalRoadRow)
+                                roadRowMeta=NormalRoadRow)
                     newBranch = copy.deepcopy(branch)
                     newNode = self.growNode(node, c, newBranch)
                     self.grow(newNode, newBranch, baseLineID)
@@ -530,7 +538,7 @@ class ParkingStallSolver(Solver):
             # if this node is a "R" road
             elif isinstance(node, RoadRow):
                 c = CarStallRow(baseLineID=baseLineID,
-                                referenceLine=self.offsetRow(self.zone, node.referenceLine,
+                                referenceLine=offsetRow(self.zone, node.referenceLine,
                                                              self.zone.offsetDirection[baseLineID], carStallType.width),
                                 carStallMeta=carStallType)
                 newBranch = copy.deepcopy(branch)
